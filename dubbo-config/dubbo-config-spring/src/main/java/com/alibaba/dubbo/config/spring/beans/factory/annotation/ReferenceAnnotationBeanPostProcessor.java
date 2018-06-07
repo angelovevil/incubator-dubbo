@@ -16,8 +16,25 @@
  */
 package com.alibaba.dubbo.config.spring.beans.factory.annotation;
 
-import com.alibaba.dubbo.config.annotation.Reference;
-import com.alibaba.dubbo.config.spring.ReferenceBean;
+import static org.springframework.core.BridgeMethodResolver.findBridgedMethod;
+import static org.springframework.core.BridgeMethodResolver.isVisibilityBridgeMethodPair;
+import static org.springframework.core.annotation.AnnotationUtils.findAnnotation;
+import static org.springframework.core.annotation.AnnotationUtils.getAnnotation;
+
+import java.beans.PropertyDescriptor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Member;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.beans.BeanUtils;
@@ -38,23 +55,8 @@ import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
 
-import java.beans.PropertyDescriptor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
-import static org.springframework.core.BridgeMethodResolver.findBridgedMethod;
-import static org.springframework.core.BridgeMethodResolver.isVisibilityBridgeMethodPair;
-import static org.springframework.core.annotation.AnnotationUtils.findAnnotation;
-import static org.springframework.core.annotation.AnnotationUtils.getAnnotation;
+import com.alibaba.dubbo.config.annotation.Reference;
+import com.alibaba.dubbo.config.spring.ReferenceBean;
 
 /**
  * {@link org.springframework.beans.factory.config.BeanPostProcessor} implementation
@@ -280,16 +282,28 @@ public class ReferenceAnnotationBeanPostProcessor extends InstantiationAwareBean
         private final Collection<ReferenceFieldElement> fieldElements;
 
         private final Collection<ReferenceMethodElement> methodElements;
-
-
+        
+        private final Collection<InjectedElement> injectedElements;
+        
         public ReferenceInjectionMetadata(Class<?> targetClass, Collection<ReferenceFieldElement> fieldElements,
                                           Collection<ReferenceMethodElement> methodElements) {
             super(targetClass, combine(fieldElements, methodElements));
             this.fieldElements = fieldElements;
             this.methodElements = methodElements;
+            this.injectedElements = combine(fieldElements, methodElements);
         }
+        
+        @Override
+		public void checkConfigMembers(RootBeanDefinition beanDefinition) {
+        	for (InjectedElement element : this.injectedElements) {
+    			Member member = element.getMember();
+    			if (!beanDefinition.isExternallyManagedConfigMember(member)) {
+    				beanDefinition.registerExternallyManagedConfigMember(member);
+    			}
+    		}
+		}
 
-        private static <T> Collection<T> combine(Collection<? extends T>... elements) {
+		private static <T> Collection<T> combine(Collection<? extends T>... elements) {
             List<T> allElements = new ArrayList<T>();
             for (Collection<? extends T> e : elements) {
                 allElements.addAll(e);
